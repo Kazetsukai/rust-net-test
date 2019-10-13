@@ -1,13 +1,21 @@
 use ctrlc;
 
-use std::{thread, time, process};
+use std::{thread, time};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use crossterm::{cursor, terminal, AlternateScreen, ClearType, Result};
+use crossterm::{Result, input, InputEvent, KeyEvent};
+
+mod termdisplay;
+
+#[derive(Default)]
+struct PlayerInput {
+	left: bool,
+	right: bool,
+	up: bool,
+	down: bool
+}
 
 fn main() -> Result<()> {
-	let screen = AlternateScreen::to_alternate(false)?;
-
 	// Catch Ctrl-C and gracefully exit
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -16,56 +24,67 @@ fn main() -> Result<()> {
 	};
 	ctrlc::set_handler(handler).expect("Error setting handler");
 
-	let cursor = cursor();
-	let terminal = terminal();
+	let cleanup = termdisplay::init()?;
 
-	cursor.hide()?;
+	let input = input();
+	let mut stdin = input.read_async();
+	let mut player_input = PlayerInput { ..Default::default() };
 
-	let mut i = 0;
+	let mut pos = (0, 0);
 	while running.load(Ordering::SeqCst) {
-		terminal.clear(ClearType::All)?;
-		draw_border()?;
-		draw_player(i, 0, "X")?;
-		i += 1;
-		if i > 100 {
-			running.store(false, Ordering::SeqCst);
+		if let Some(key_event) = stdin.next() {
+			if !process_input_event(key_event, &mut player_input) {
+				running.store(false, Ordering::SeqCst);
+			}
 		}
+		
+		update_sim(&player_input, &mut pos);
+
+		termdisplay::clear()?;
+		termdisplay::draw_border()?;
+
+		let (x, y) = pos;
+		termdisplay::draw_player(x, y, "X")?;
+
     	thread::sleep(time::Duration::from_millis(50));
     }
 
-    // Clean up terminal
-	cursor.show()?;
-	screen.to_main()?;
+    cleanup()?;
 
     Ok(())
 }
 
-fn draw_player(x: u16, y: u16, ch: &str) -> Result<()> {
-	let cursor = cursor();
-	let terminal = terminal();
+fn update_sim(player_input: &PlayerInput, (x, y): &mut (u16, u16)) {
 
-	cursor.goto(x + 6, y + 6)?;
-	terminal.write(ch)?;
-
-	Ok(())
 }
 
-fn draw_border() -> Result<()> {
-	let cursor = cursor();
-	let terminal = terminal();
+fn process_input_event(key_event: InputEvent, player_input: &mut PlayerInput) -> bool {
+    match key_event {
+        InputEvent::Keyboard(k) => {
+            match k {
+                KeyEvent::Char(c) => match c {
+                	'w' => {
+                		player_input.up = true;
+                	},
+                	'a' => {
+                		player_input.left = true;
+                	},
+                	's' => {
+                		player_input.down = true;
+                	},
+                	'd' => {
+                		player_input.right = true;
+                	},
+                	'q' => {
+                		return false;
+                	},
+                	_ => ()
+                },
+            	_ => ()
+            }
+        },
+        _ => ()
+    };
 
-	cursor.goto(5, 5)?;
-    terminal.write("#############################################################")?;
-
-    for y in 6..30 {
-	    cursor.goto(5, y)?;
-	    terminal.write("#")?;
-	    cursor.goto(65, y)?;
-	    terminal.write("#")?;
-    }
-
-    cursor.goto(5, 30)?;
-    terminal.write("#############################################################")?;
-
-    Ok(())
+    true
 }
