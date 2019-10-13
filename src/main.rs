@@ -28,11 +28,13 @@ fn main() -> Result<()> {
 
 	let input = input();
 	let mut stdin = input.read_async();
-	let mut player_input = PlayerInput { ..Default::default() };
+	let mut player_input;
 
 	let mut pos = (0, 0);
 	while running.load(Ordering::SeqCst) {
-		if let Some(key_event) = stdin.next() {
+        player_input = PlayerInput { ..Default::default() };
+
+		while let Some(key_event) = stdin.next() {
 			if !process_input_event(key_event, &mut player_input) {
 				running.store(false, Ordering::SeqCst);
 			}
@@ -44,9 +46,9 @@ fn main() -> Result<()> {
 		termdisplay::draw_border()?;
 
 		let (x, y) = pos;
-		termdisplay::draw_player(x, y, "X")?;
+		termdisplay::draw_player(x, y, "A")?;
 
-    	thread::sleep(time::Duration::from_millis(50));
+    	thread::sleep(time::Duration::from_millis(100));
     }
 
     cleanup()?;
@@ -55,7 +57,18 @@ fn main() -> Result<()> {
 }
 
 fn update_sim(player_input: &PlayerInput, (x, y): &mut (u16, u16)) {
-
+    if player_input.left {
+        if *x > 1 { *x -= 2; }
+    }
+    if player_input.right {
+        if *x < 99 { *x += 2; }
+    }    
+    if player_input.up {
+        if *y > 0 { *y -= 1; }
+    }
+    if player_input.down {
+        if *y < 100 { *y += 1; }
+    }
 }
 
 fn process_input_event(key_event: InputEvent, player_input: &mut PlayerInput) -> bool {
